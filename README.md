@@ -102,6 +102,3 @@ the database, walks through the booking flow and checks each rule.
 - Integration tests against a real database for the booking transaction
 - Pagination on hotel search
 
-
-# hotel-booking-api
-# hotel-booking-api
