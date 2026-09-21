@@ -1,0 +1,293 @@
+openapi: 3.0.3
+info:
+  title: Hotel Booking API
+  version: 1.0.0
+  description: |
+    Find hotels, check room availability and book rooms.
+
+    Dates are `YYYY-MM-DD`. A stay covers the nights from `check_in` up to,
+    but not including, `check_out`.
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [system]
+      responses:
+        "200":
+          description: The service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/v1/hotels:
+    get:
+      summary: Find hotels by name
+      description:  Each hotel is returned with its rooms
+      tags: [hotels]
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+          example: overlook
+      responses:
+        "200":
+          description: Matching hotels, possibly none
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Hotel"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/hotels/{id}/rooms:
+    get:
+      summary: Find available rooms
+      description: Rooms of the hotel that sleep at least `guests` people and are free for every night of the stay
+      tags: [hotels]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+        - name: check_in
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: "2026-12-01"
+        - name: check_out
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: "2026-12-04"
+        - name: guests
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          example: 2
+      responses:
+        "200":
+          description: Available rooms, possibly none
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Room"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/bookings:
+    post:
+      summary: Book a room
+      description: |
+        Books one room for the whole stay. A confirmation email is sent asynchronously after the booking is made.
+      tags: [bookings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingRequest"
+      responses:
+        "201":
+          description: The booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The room is already booked for some of those nights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: The room cannot sleep that many guests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/bookings/{reference}:
+    get:
+      summary: Get a booking
+      tags: [bookings]
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema:
+            type: string
+          example: BK-3F9A01C2B4E57D10
+      responses:
+        "200":
+          description: The booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/test/seed:
+    post:
+      summary: Seed the database
+      description: Removes all data, then creates three hotels with six rooms each (two single, two double, two deluxe).
+      tags: [test]
+      responses:
+        "200":
+          description: The seeded hotels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Hotel"
+
+  /api/v1/test/reset:
+    post:
+      summary: Reset the database
+      description: Removes all data, ready for seeding.
+      tags: [test]
+      responses:
+        "204":
+          description: All data removed
+
+components:
+  schemas:
+    Hotel:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: The Overlook
+        rooms:
+          type: array
+          items:
+            $ref: "#/components/schemas/Room"
+
+    Room:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 3
+        hotel_id:
+          type: integer
+          example: 1
+        number:
+          type: string
+          example: "201"
+        type:
+          type: string
+          enum: [single, double, deluxe]
+        capacity:
+          type: integer
+          description: single sleeps 1, double 2, deluxe 4
+          example: 2
+
+    BookingRequest:
+      type: object
+      required: [room_id, guests, guest_name, guest_email, check_in, check_out]
+      properties:
+        room_id:
+          type: integer
+          example: 3
+        guests:
+          type: integer
+          minimum: 1
+          example: 2
+        guest_name:
+          type: string
+          example: Homer Simpson
+        guest_email:
+          type: string
+          format: email
+          example: homer@springfield.com
+        check_in:
+          type: string
+          format: date
+          example: "2026-12-01"
+        check_out:
+          type: string
+          format: date
+          example: "2026-12-04"
+
+    Booking:
+      type: object
+      properties:
+        reference:
+          type: string
+          example: BK-3F9A01C2B4E57D10
+        room_id:
+          type: integer
+          example: 3
+        room:
+          $ref: "#/components/schemas/Room"
+        guest_name:
+          type: string
+          example: Homer Simpson
+        guest_email:
+          type: string
+          example: homer@springfield.com
+        guests:
+          type: integer
+          example: 2
+        check_in:
+          type: string
+          format: date-time
+          example: "2026-12-01T00:00:00Z"
+        check_out:
+          type: string
+          format: date-time
+          example: "2026-12-04T00:00:00Z"
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: The request is invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: The room or booking does not exist
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
