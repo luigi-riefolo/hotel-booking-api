@@ -10,12 +10,22 @@ import (
 	"gorm.io/gorm/logger"
 
 	"hotelbooking/internal/booking"
+	"hotelbooking/internal/config"
 	"hotelbooking/internal/hotel"
 )
 
-func Open(dsn string) (*gorm.DB, error) {
+// Store owns the database connection
+type Store struct {
+	DB *gorm.DB
+}
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Warn)})
+func NewStore(cfg config.Postgres) (*Store, error) {
+
+	db, err := gorm.Open(
+		postgres.Open(cfg.DSN()),
+		&gorm.Config{
+			Logger: logger.Default.LogMode(logger.Warn),
+		})
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to the database: %w", err)
 	}
@@ -25,7 +35,7 @@ func Open(dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("could not migrate the schema: %w", err)
 	}
 
-	return db, nil
+	return &Store{DB: db}, nil
 }
 
 // every hotel gets the same six rooms, two of each type
@@ -40,9 +50,9 @@ var rooms = []hotel.Room{
 
 // Seed resets the database and fills it with three hotels
 // TODO: maybe use sidecar or init script?
-func Seed(ctx context.Context, db *gorm.DB) ([]hotel.Hotel, error) {
+func (s *Store) Seed(ctx context.Context) ([]hotel.Hotel, error) {
 
-	err := Reset(ctx, db)
+	err := s.Reset(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +63,7 @@ func Seed(ctx context.Context, db *gorm.DB) ([]hotel.Hotel, error) {
 		hotels = append(hotels, hotel.Hotel{Name: name, Rooms: append([]hotel.Room{}, rooms...)})
 	}
 
-	err = db.WithContext(ctx).Create(&hotels).Error
+	err = s.DB.WithContext(ctx).Create(&hotels).Error
 	if err != nil {
 		return nil, fmt.Errorf("could not seed the hotels: %w", err)
 	}
@@ -64,9 +74,9 @@ func Seed(ctx context.Context, db *gorm.DB) ([]hotel.Hotel, error) {
 }
 
 // Reset removes all data and restarts the ids
-func Reset(ctx context.Context, db *gorm.DB) error {
+func (s *Store) Reset(ctx context.Context) error {
 
-	err := db.WithContext(ctx).Exec("TRUNCATE bookings, rooms, hotels RESTART IDENTITY").Error
+	err := s.DB.WithContext(ctx).Exec("TRUNCATE bookings, rooms, hotels RESTART IDENTITY").Error
 	if err != nil {
 		return fmt.Errorf("could not reset the database: %w", err)
 	}

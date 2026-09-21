@@ -9,7 +9,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"gorm.io/gorm"
 
 	"hotelbooking/internal/booking"
 	"hotelbooking/internal/hotel"
@@ -18,7 +17,7 @@ import (
 
 // Server maps the hotel and booking services onto HTTP
 type Server struct {
-	DB              *gorm.DB
+	Store           *store.Store
 	Hotels          *hotel.Service
 	BookingsService *booking.Service
 }
@@ -161,7 +160,7 @@ func (s *Server) getBooking(c echo.Context) error {
 
 func (s *Server) seed(c echo.Context) error {
 
-	hotels, err := store.Seed(c.Request().Context(), s.DB)
+	hotels, err := s.Store.Seed(c.Request().Context())
 	if err != nil {
 		return err
 	}
@@ -171,7 +170,7 @@ func (s *Server) seed(c echo.Context) error {
 
 func (s *Server) reset(c echo.Context) error {
 
-	err := store.Reset(c.Request().Context(), s.DB)
+	err := s.Store.Reset(c.Request().Context())
 	if err != nil {
 		return err
 	}

@@ -38,16 +38,16 @@ func main() {
 		})
 	slog.SetDefault(slog.New(logHandler))
 
-	db, err := store.Open(cfg.Postgres.DSN())
+	st, err := store.NewStore(cfg.Postgres)
 	if err != nil {
 		fatal("could not open the database", "err", err)
 	}
 
-	service := &booking.Service{DB: db}
+	service := &booking.Service{DB: st.DB}
 
 	server := &api.Server{
-		DB:              db,
-		Hotels:          &hotel.Service{DB: db},
+		Store:           st,
+		Hotels:          &hotel.Service{DB: st.DB},
 		BookingsService: service,
 	}
 
