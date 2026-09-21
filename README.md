@@ -23,7 +23,7 @@ See `./internal/config/config.go` for more details
 
 ## API docs
 
-You can find the api docs here `./docs/openapi.yaml`
+You can find the api docs [here](./docs/openapi.yaml)
 
 ## Endpoints
 
