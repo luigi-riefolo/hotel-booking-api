@@ -1,0 +1,203 @@
+{
+  "info": {
+    "name": "Hotel Booking API",
+    "description": "Run in order: seeds the database, books a room and checks the booking rules.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const day = 24 * 60 * 60 * 1000;",
+          "const iso = (n) => new Date(Date.now() + n * day).toISOString().slice(0, 10);",
+          "pm.collectionVariables.set('check_in', iso(30));",
+          "pm.collectionVariables.set('check_out', iso(33));",
+          "pm.collectionVariables.set('overlap_in', iso(32));",
+          "pm.collectionVariables.set('overlap_out', iso(35));",
+          "pm.collectionVariables.set('past_in', iso(-5));",
+          "pm.collectionVariables.set('past_out', iso(-2));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": { "method": "GET", "url": "{{base_url}}/health" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));"
+      ] } }]
+    },
+    {
+      "name": "Seed",
+      "request": { "method": "POST", "url": "{{base_url}}/api/v1/test/seed" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "const hotels = pm.response.json();",
+        "pm.test('three hotels with six rooms each', () => {",
+        "    pm.expect(hotels).to.have.length(3);",
+        "    hotels.forEach(h => pm.expect(h.rooms).to.have.length(6));",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "Find hotel by name",
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/hotels?name=overlook" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "const hotels = pm.response.json();",
+        "pm.test('finds The Overlook', () => pm.expect(hotels[0].name).to.eql('The Overlook'));",
+        "pm.collectionVariables.set('hotel_id', hotels[0].id);",
+        "pm.collectionVariables.set('room_id', hotels[0].rooms.find(r => r.type === 'double').id);"
+      ] } }]
+    },
+    {
+      "name": "Find hotel without a name",
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/hotels" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 400', () => pm.response.to.have.status(400));"
+      ] } }]
+    },
+    {
+      "name": "Available rooms for two guests",
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/hotels/{{hotel_id}}/rooms?check_in={{check_in}}&check_out={{check_out}}&guests=2" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "pm.test('two doubles and two deluxes', () => pm.expect(pm.response.json()).to.have.length(4));"
+      ] } }]
+    },
+    {
+      "name": "Available rooms for five guests",
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/hotels/{{hotel_id}}/rooms?check_in={{check_in}}&check_out={{check_out}}&guests=5" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "pm.test('no room sleeps five', () => pm.expect(pm.response.json()).to.have.length(0));"
+      ] } }]
+    },
+    {
+      "name": "Available rooms with dates reversed",
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/hotels/{{hotel_id}}/rooms?check_in={{check_out}}&check_out={{check_in}}&guests=2" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 400', () => pm.response.to.have.status(400));"
+      ] } }]
+    },
+    {
+      "name": "Book a room",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/bookings",
+        "body": { "mode": "raw", "raw": "{\"room_id\": {{room_id}}, \"guests\": 2, \"guest_name\": \"Homer Simpson\", \"guest_email\": \"homer@springfield.com\", \"check_in\": \"{{check_in}}\", \"check_out\": \"{{check_out}}\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 201', () => pm.response.to.have.status(201));",
+        "const b = pm.response.json();",
+        "pm.test('has a reference', () => pm.expect(b.reference).to.match(/^BK-[0-9A-F]{16}$/));",
+        "pm.collectionVariables.set('reference', b.reference);"
+      ] } }]
+    },
+    {
+      "name": "Get the booking",
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/bookings/{{reference}}" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "pm.test('same booking', () => pm.expect(pm.response.json().reference).to.eql(pm.collectionVariables.get('reference')));"
+      ] } }]
+    },
+    {
+      "name": "Get a booking that does not exist",
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/bookings/BK-0000000000000000" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 404', () => pm.response.to.have.status(404));"
+      ] } }]
+    },
+    {
+      "name": "Book the same room for overlapping nights",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/bookings",
+        "body": { "mode": "raw", "raw": "{\"room_id\": {{room_id}}, \"guests\": 1, \"guest_name\": \"Marge Simpson\", \"guest_email\": \"marge@springfield.com\", \"check_in\": \"{{overlap_in}}\", \"check_out\": \"{{overlap_out}}\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 409', () => pm.response.to.have.status(409));"
+      ] } }]
+    },
+    {
+      "name": "Book the same room from the check out day",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/bookings",
+        "body": { "mode": "raw", "raw": "{\"room_id\": {{room_id}}, \"guests\": 1, \"guest_name\": \"Marge Simpson\", \"guest_email\": \"marge@springfield.com\", \"check_in\": \"{{check_out}}\", \"check_out\": \"{{overlap_out}}\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 201', () => pm.response.to.have.status(201));"
+      ] } }]
+    },
+    {
+      "name": "Booked room is no longer available",
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/hotels/{{hotel_id}}/rooms?check_in={{check_in}}&check_out={{check_out}}&guests=2" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 200', () => pm.response.to.have.status(200));",
+        "const ids = pm.response.json().map(r => r.id);",
+        "pm.test('room is gone', () => pm.expect(ids).to.not.include(Number(pm.collectionVariables.get('room_id'))));"
+      ] } }]
+    },
+    {
+      "name": "Book more guests than the room sleeps",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/bookings",
+        "body": { "mode": "raw", "raw": "{\"room_id\": 1, \"guests\": 3, \"guest_name\": \"Bart Simpson\", \"guest_email\": \"bart@springfield.com\", \"check_in\": \"{{check_in}}\", \"check_out\": \"{{check_out}}\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 422', () => pm.response.to.have.status(422));"
+      ] } }]
+    },
+    {
+      "name": "Book in the past",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/bookings",
+        "body": { "mode": "raw", "raw": "{\"room_id\": 1, \"guests\": 1, \"guest_name\": \"Lisa Simpson\", \"guest_email\": \"lisa@springfield.com\", \"check_in\": \"{{past_in}}\", \"check_out\": \"{{past_out}}\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 400', () => pm.response.to.have.status(400));"
+      ] } }]
+    },
+    {
+      "name": "Book a room that does not exist",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{base_url}}/api/v1/bookings",
+        "body": { "mode": "raw", "raw": "{\"room_id\": 999, \"guests\": 1, \"guest_name\": \"Lisa Simpson\", \"guest_email\": \"lisa@springfield.com\", \"check_in\": \"{{check_in}}\", \"check_out\": \"{{check_out}}\"}" }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 404', () => pm.response.to.have.status(404));"
+      ] } }]
+    },
+    {
+      "name": "Reset",
+      "request": { "method": "POST", "url": "{{base_url}}/api/v1/test/reset" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('status 204', () => pm.response.to.have.status(204));"
+      ] } }]
+    },
+    {
+      "name": "Data is gone",
+      "request": { "method": "GET", "url": "{{base_url}}/api/v1/hotels?name=overlook" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('no hotels', () => pm.expect(pm.response.json()).to.have.length(0));"
+      ] } }]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080" }
+  ]
+}

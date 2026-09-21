@@ -1,5 +1,7 @@
 .DEFAULT_GOAL := help
 
+
+
 ## up: build and start the api and database
 up:
 	docker compose up --build
@@ -22,10 +24,13 @@ newman:
 		postman/newman:alpine run hotel-booking.postman_collection.json \
 		--env-var base_url=http://host.docker.internal:8080
 
+
 ## help: show this help
 help:
 	@echo "Usage: make <target>"
 	@echo
 	@grep -E '^## [a-z]+:' $(MAKEFILE_LIST) | sed 's/^## //' | awk -F': ' '{printf "  \033[36m%-8s\033[0m %s\n", $$1, $$2}'
+
+
 
 .PHONY: up down run test newman help
